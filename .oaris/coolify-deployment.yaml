@@ -1,6 +1,6 @@
 services:
   chatwoot:
-    image: 'chatwoot/chatwoot:latest'
+    image: 'ghcr.io/oaris-dev/chatwoot:latest'
     depends_on:
       - postgres
       - redis
@@ -46,7 +46,7 @@ services:
       timeout: 20s
       retries: 10
   sidekiq:
-    image: 'chatwoot/chatwoot:latest'
+    image: 'ghcr.io/oaris-dev/chatwoot:latest'
     depends_on:
       - postgres
       - redis
