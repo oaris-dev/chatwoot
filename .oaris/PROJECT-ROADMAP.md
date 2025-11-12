@@ -1,8 +1,9 @@
 # Oaris Chat (Chatwoot Fork) - Project Roadmap
 
 **Repository:** `github.com/oaris-dev/chatwoot`
-**Branch:** `feature/oaris-branding`
-**Local Instance:** http://localhost:3000
+**Production Branch:** `chatwoot-oaris-edition`
+**Upstream Sync Branch:** `develop`
+**Docker Image:** `ghcr.io/oaris-dev/chatwoot:latest`
 
 ---
 
@@ -105,61 +106,84 @@ docker-compose -f docker-compose.oaris.yaml up -d
 
 ## 🚀 Milestone 2: Production Deployment (Coolify)
 
-### Issue #5: Prepare for Coolify Deployment
-- [ ] Merge `feature/oaris-branding` into `develop` branch
-- [ ] Push `develop` to GitHub
-- [ ] Verify all deployment configs are committed
-- [ ] Test GitHub repo accessibility from Coolify server
+### Issue #5: GitHub Container Registry Setup ✅ COMPLETE
+- [x] Set up GitHub Actions workflow to build custom image
+- [x] Configure automatic image build on push to `chatwoot-oaris-edition`
+- [x] Publish to GitHub Container Registry (GHCR)
+- [x] Update compose file to use GHCR image
+- [x] Add Coolify labels to mark internal services
 
-**Pre-deployment Checklist:**
-```bash
-# Merge feature branch
-git checkout develop
-git merge feature/oaris-branding
-git push origin develop
+**Created:**
+- `.github/workflows/build-push-image.yml` - Automated Docker image build
+- Image: `ghcr.io/oaris-dev/chatwoot:latest`
+- Build time: ~20-25 minutes (first build), ~10-15 minutes (cached)
+- Cost: FREE (GitHub Actions + GHCR free for public repos)
 
-# Verify deployment files exist
-ls -la .oaris/coolify-deployment.yaml
-ls -la docker-compose.oaris.yaml
-```
+**Benefits:**
+- ✅ No build in Coolify (just pulls image)
+- ✅ Faster deployments (~2-5 min vs ~20 min)
+- ✅ Custom branding included in image
+- ✅ Automatic rebuilds on code changes
 
 ---
 
 ### Issue #6: Set Up Coolify Service
+- [ ] Make GHCR image public (required for Coolify to pull)
 - [ ] Create new service in Coolify
 - [ ] Configure as "Docker Compose" type
 - [ ] Point to GitHub repo: `github.com/oaris-dev/chatwoot`
-- [ ] Select branch: `develop`
+- [ ] Select branch: `chatwoot-oaris-edition`
 - [ ] Specify docker-compose file: `.oaris/coolify-deployment.yaml`
+- [ ] Set environment variables (SMTP, secrets, etc.)
 
 **Coolify Configuration:**
 - **Service Type:** Docker Compose
 - **Repository:** `https://github.com/oaris-dev/chatwoot`
-- **Branch:** `develop`
+- **Branch:** `chatwoot-oaris-edition` (production with custom branding)
 - **Docker Compose Location:** `.oaris/coolify-deployment.yaml`
-- **Build Context:** `.` (root)
-- **Dockerfile:** `docker/Dockerfile`
+- **Image:** `ghcr.io/oaris-dev/chatwoot:latest` (pre-built)
 
-**Environment Variables to Set:**
+**Required Environment Variables:**
 ```env
-SERVICE_PASSWORD_CHATWOOT=<generate-secret-key>
-SERVICE_URL_CHATWOOT=https://chat.oaris.dev
-SERVICE_PASSWORD_REDIS=<generate-redis-password>
+# Secrets (generate with openssl rand -hex)
+SERVICE_PASSWORD_CHATWOOT=<secret-key-base-128-chars>
+SERVICE_PASSWORD_REDIS=<redis-password-64-chars>
 SERVICE_USER_POSTGRES=chatwoot
-SERVICE_PASSWORD_POSTGRES=<generate-postgres-password>
+SERVICE_PASSWORD_POSTGRES=<postgres-password-64-chars>
 POSTGRES_DB=chatwoot
-CHATWOOT_MAILER_SENDER_EMAIL=noreply@oaris.dev
+
+# URLs
+SERVICE_URL_CHATWOOT=https://<your-domain>
+
+# SMTP Configuration
+CHATWOOT_MAILER_SENDER_EMAIL=<sender-email>
+CHATWOOT_SMTP_ADDRESS=<smtp-server>
+CHATWOOT_SMTP_PORT=587
+CHATWOOT_SMTP_AUTHENTICATION=login
+CHATWOOT_SMTP_USERNAME=<smtp-username>
+CHATWOOT_SMTP_PASSWORD=<mailbox-password>
+CHATWOOT_SMTP_DOMAIN=<your-domain>
+CHATWOOT_SMTP_ENABLE_STARTTLS_AUTO=true
 ```
 
-**Question to Resolve:** ✅ Yes, Coolify supports specifying both Git repo AND custom docker-compose file path
+**First-Time Setup:**
+1. Go to https://github.com/oaris-dev/chatwoot/pkgs/container/chatwoot
+2. Make image public (Package settings → Change visibility → Public)
 
 ---
 
-### Issue #7: Configure Domain & SSL
-- [ ] Set up domain: `chat.oaris.dev` (or chosen domain)
-- [ ] Configure SSL certificate (Let's Encrypt)
-- [ ] Test HTTPS access
-- [ ] Verify redirects and CORS settings
+### Issue #7: Configure Domain & SSL ✅ MOSTLY COMPLETE
+- [x] Set up domain (production domain) ✅
+- [x] Configure SSL certificate (Let's Encrypt) ✅
+- [x] Test HTTPS access ✅ HTTP/2 working
+- [x] Verify branding ("Chatwoot oaris edition" with OA Edition logos) ✅
+- [x] Create admin account and test login ✅ SuperAdmin account created
+- [ ] Configure database backups → **POSTPONED to Issue #18**
+
+**Status:** Production deployment live
+**SSL:** Let's Encrypt certificate valid, auto-renewal configured
+**Branding:** Verified working ("Chatwoot oaris edition" + OA Edition logos)
+**Admin:** SuperAdmin account created and functional
 
 ---
 
@@ -414,6 +438,37 @@ docker build -t oaris-chatwoot:latest -f docker/Dockerfile .
 
 ---
 
+### Issue #18: Configure Database Backups
+- [ ] Research Chatwoot built-in backup features
+- [ ] Check if Chatwoot has native S3 backup integration
+- [ ] Review Chatwoot backup documentation
+- [ ] Compare Chatwoot native backups vs manual automation
+- [ ] Decide on backup strategy (native vs Coolify Scheduled Tasks)
+- [ ] Implement chosen backup solution
+- [ ] Test backup and restore procedures
+- [ ] Configure S3 lifecycle policies for retention
+
+**Priority:** HIGH (should be completed within 24-48 hours of production deployment)
+
+**Investigation needed:**
+Before implementing manual backups via Coolify Scheduled Tasks, investigate if Chatwoot has:
+- Built-in S3 backup integration
+- Native backup commands or rake tasks
+- Database migration/backup utilities
+- Recommended backup procedures in docs
+
+**Resources:**
+- Backup automation plan: `.oaris/local/BACKUP-AUTOMATION-PLAN.md` (manual approach)
+- Chatwoot docs: https://www.chatwoot.com/docs/self-hosted
+- S3 already configured: Hetzner Object Storage (bucket: `oaris`)
+
+**Options:**
+1. **Chatwoot Native** - If available, use built-in backup features
+2. **Coolify Scheduled Tasks** - Manual pg_dump + S3 upload (documented in backup plan)
+3. **Hybrid** - Combine Chatwoot native + manual storage backups
+
+---
+
 ## 📊 Progress Tracking
 
 ### Milestone 1: Branding & Visual Identity
@@ -423,9 +478,9 @@ docker build -t oaris-chatwoot:latest -f docker/Dockerfile .
 - [x] Issue #4: Deployment infrastructure ✅
 
 ### Milestone 2: Production Deployment
-- [ ] Issue #5: Prepare for deployment
-- [ ] Issue #6: Set up Coolify service
-- [ ] Issue #7: Configure domain & SSL
+- [x] Issue #5: GitHub Container Registry setup ✅
+- [x] Issue #6: Set up Coolify service ✅
+- [x] Issue #7: Configure domain & SSL ✅ (backup task → Issue #18)
 
 ### Milestone 3: Flowise Integration
 - [ ] Issue #8: Research Flowise deployment
@@ -440,41 +495,53 @@ docker build -t oaris-chatwoot:latest -f docker/Dockerfile .
 - [x] Issue #15: Documentation (Coolify guide + Logo guide) ✅
 - [ ] Issue #16: Version management
 - [ ] Issue #17: Upstream sync strategy
+- [ ] Issue #18: Configure database backups (HIGH priority)
 
 ---
 
 ## 🚦 Current Status
 
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-11-12
 
-**Current Phase:** Milestone 1 COMPLETE ✅ → Ready for Milestone 2 (Production Deployment)
-**Active Branch:** `feature/oaris-branding`
-**Local Instance:** Running at http://localhost:3000
-**Docker Image:** `oaris-chatwoot:latest` (built with logos and branding)
+**Current Phase:** 🎉 **Milestone 2 COMPLETE** → Production Deployment Live!
+**Production Branch:** `chatwoot-oaris-edition`
+**Upstream Sync Branch:** `develop` (mirrors upstream Chatwoot)
+**Docker Image:** `ghcr.io/oaris-dev/chatwoot:latest` (GitHub Container Registry)
 
-**Milestone 1 Completed:**
+**Branching Strategy:**
+```
+upstream/develop → develop (clean mirror) → chatwoot-oaris-edition (customizations)
+```
+
+**✅ Milestone 1 COMPLETE:**
 - [x] Fork Chatwoot repository
-- [x] Set up Git workflow (upstream + origin)
+- [x] Set up Git workflow (upstream + origin with proper branch strategy)
 - [x] Change installation name to "Chatwoot oaris edition"
 - [x] Implement Oaris Edition logos with "OA Edition" tagline
 - [x] Increase logo visibility (32px → 48px)
-- [x] Build custom Docker image
-- [x] Local development environment running
-- [x] Create deployment configurations (local + production)
+- [x] Create deployment configurations (Coolify)
 - [x] Document logo usage and deployment process
-- [x] Clean git history (4 logical commits)
 
-**What's Working:**
-- ✅ Browser tab: "Chatwoot oaris edition"
-- ✅ Login page: Oaris Edition logo (48px height)
-- ✅ Signup page: Oaris Edition logo (48px height)
-- ✅ Local development: http://localhost:3000
-- ✅ Docker compose files ready for deployment
+**✅ Milestone 2 COMPLETE:**
+- [x] Set up GitHub Actions for automated image builds
+- [x] Configure GitHub Container Registry publishing
+- [x] Add Coolify service labels for internal services
+- [x] Deploy to production
+- [x] Configure SSL certificate (Let's Encrypt)
+- [x] Verify custom branding in production
+- [x] Create SuperAdmin account
 
-**Next Up (Milestone 2):**
-1. **Issue #5:** Merge `feature/oaris-branding` into `develop`
-2. **Issue #6:** Set up Coolify service (follow `.oaris/local/COOLIFY-DEPLOYMENT-GUIDE.md`)
-3. **Issue #7:** Configure domain & SSL (chat.oaris.dev)
+**🚀 Production Deployment:**
+- ✅ **SSL:** Let's Encrypt certificate with HTTP/2
+- ✅ **Branding:** "Chatwoot oaris edition" verified
+- ✅ **Admin:** SuperAdmin account functional
+- ✅ **Infrastructure:** 4 healthy containers (chatwoot, sidekiq, postgres, redis)
+- ✅ **Resources:** 773 MB RAM total (very efficient)
+- ✅ **Image:** Custom GHCR image with auto-builds
+
+**🔜 Next Up (Milestone 3):**
+1. **Issue #18:** Research and configure database backups (HIGH priority)
+2. **Issue #8-14:** Flowise Integration (AI chatbot powered by Flowise flows)
 
 ---
 
