@@ -50,9 +50,6 @@ services:
     depends_on:
       - postgres
       - redis
-    labels:
-      - coolify.managed=true
-      - coolify.type=service
     environment:
       - SECRET_KEY_BASE=$SERVICE_PASSWORD_CHATWOOT
       - 'FRONTEND_URL=${SERVICE_URL_CHATWOOT}'
@@ -97,9 +94,6 @@ services:
   postgres:
     image: 'pgvector/pgvector:pg12'
     restart: always
-    labels:
-      - coolify.managed=true
-      - coolify.type=service
     volumes:
       - 'postgres-data:/var/lib/postgresql/data'
     environment:
@@ -116,9 +110,6 @@ services:
   redis:
     image: 'redis:alpine'
     restart: always
-    labels:
-      - coolify.managed=true
-      - coolify.type=service
     command:
       - sh
       - '-c'
