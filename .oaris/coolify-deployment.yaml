@@ -15,8 +15,6 @@ services:
     depends_on:
       - postgres
       - redis
-    ports:
-      - '3000:3000'
     environment:
       - SERVICE_URL_CHATWOOT_3000
       - SERVICE_FQDN_CHATWOOT=${SERVICE_FQDN_CHATWOOT}
@@ -73,6 +71,7 @@ services:
       - FRONTEND_URL=${SERVICE_URL_CHATWOOT}
       - DEFAULT_LOCALE=${CHATWOOT_DEFAULT_LOCALE:-en}
       - FORCE_SSL=${FORCE_SSL:-false}
+      - ENABLE_ACCOUNT_SIGNUP=${ENABLE_ACCOUNT_SIGNUP:-false}
       - REDIS_URL=redis://default@redis:6379
       - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
       - REDIS_OPENSSL_VERIFY_MODE=none
