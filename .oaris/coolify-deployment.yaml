@@ -1,12 +1,6 @@
 services:
   chatwoot:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        RAILS_ENV: production
-        BUNDLE_WITHOUT: development:test
-        RAILS_SERVE_STATIC_FILES: 'true'
+    image: 'chatwoot/chatwoot:latest'
     depends_on:
       - postgres
       - redis
@@ -52,12 +46,7 @@ services:
       timeout: 20s
       retries: 10
   sidekiq:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        RAILS_ENV: production
-        BUNDLE_WITHOUT: development:test
+    image: 'chatwoot/chatwoot:latest'
     depends_on:
       - postgres
       - redis
