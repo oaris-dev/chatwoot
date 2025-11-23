@@ -99,7 +99,5 @@ CLAUDE.local.md
 # Histoire deployment
 .netlify
 .histoire
-
-# Oaris local files
-.oaris/local/
-.oaris/*.local.*
+.pnpm-store/*
+local/
