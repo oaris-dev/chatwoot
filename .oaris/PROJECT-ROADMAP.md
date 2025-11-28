@@ -402,11 +402,27 @@ integration_apps:
 
 ---
 
-### Issue #16: Version Management
-- [ ] Decide on version numbering scheme (e.g., 1.0.0-oaris)
-- [ ] Create VERSION file or constant
-- [ ] Display version in footer/about page
-- [ ] Tag releases in GitHub
+### Issue #16: Version Management ✅ COMPLETE
+- [x] Decide on version numbering scheme → `oaris_version: '1.0.0'`
+- [x] Create VERSION constant → `config/app.yml`
+- [x] Display version in footer/about page → `BuildInfo.vue` shows "Oaris v1.0.0"
+- [x] Expose version in API → `/api` returns `oaris_version`
+- [ ] Tag releases in GitHub (future)
+
+**Version Scheme:**
+- Upstream Chatwoot version: `4.8.0` (from `version` in `config/app.yml`)
+- Oaris Edition version: `1.0.0` (from `oaris_version` in `config/app.yml`)
+
+**Display Format:**
+- Settings → Account Settings: `v4.8.0 | Oaris v1.0.0 | Build abc1234`
+- API endpoint `/api`: `{"version": "4.8.0", "oaris_version": "1.0.0", ...}`
+
+**Files Modified:**
+- `config/app.yml` - Added `oaris_version: '1.0.0'`
+- `app/controllers/dashboard_controller.rb` - Exposed `OARIS_VERSION`
+- `app/controllers/api_controller.rb` - Added `oaris_version` to API response
+- `app/javascript/shared/store/globalConfig.js` - Added `oarisVersion` to state
+- `app/javascript/dashboard/routes/dashboard/settings/account/components/BuildInfo.vue` - Display Oaris version
 
 ---
 
@@ -504,7 +520,7 @@ ssh alma 'cat /var/log/chatwoot-backup.log'
 
 ### Additional
 - [x] Issue #15: Documentation (Coolify guide + Logo guide) ✅
-- [ ] Issue #16: Version management
+- [x] Issue #16: Version management ✅
 - [x] Issue #17: Upstream sync strategy ✅
 - [x] Issue #18: Configure database backups ✅
 
@@ -515,7 +531,8 @@ ssh alma 'cat /var/log/chatwoot-backup.log'
 **Last Updated:** 2025-11-28
 
 **Current Phase:** 🎉 **Milestone 2 COMPLETE** → Production Deployment Live!
-**Current Version:** v4.8.0+ (synced with upstream 2025-11-28)
+**Chatwoot Version:** v4.8.0 (synced with upstream 2025-11-28)
+**Oaris Edition:** v1.0.0
 **Production Branch:** `chatwoot-oaris-edition`
 **Upstream Sync Branch:** `develop` (mirrors upstream Chatwoot)
 **Docker Image:** `ghcr.io/oaris-dev/chatwoot:latest` (GitHub Container Registry)

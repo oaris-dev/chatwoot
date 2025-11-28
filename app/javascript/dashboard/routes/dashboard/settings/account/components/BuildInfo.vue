@@ -44,6 +44,9 @@ const copyGitSha = () => {
     </div>
     <div class="divide-x divide-n-slate-9">
       <span class="px-2">{{ `v${globalConfig.appVersion}` }}</span>
+      <span v-if="globalConfig.oarisVersion" class="px-2">
+        {{ `Oaris v${globalConfig.oarisVersion}` }}
+      </span>
       <span
         v-tooltip="t('COMPONENTS.CODE.BUTTON_TEXT')"
         class="px-2 build-id cursor-pointer"
