@@ -412,60 +412,71 @@ integration_apps:
 
 ## 🔄 Maintenance Tasks
 
-### Issue #17: Upstream Sync Strategy
-- [ ] Set up periodic upstream sync schedule (monthly?)
-- [ ] Document merge conflict resolution process
-- [ ] Test sync with upstream Chatwoot
-- [ ] Verify custom changes survive upstream merges
+### Issue #17: Upstream Sync Strategy ✅ COMPLETE
+- [x] Set up periodic upstream sync schedule (monthly?)
+- [x] Document merge conflict resolution process
+- [x] Test sync with upstream Chatwoot
+- [x] Verify custom changes survive upstream merges
+- [x] Create Claude Code slash command for easy syncing
 
-**Sync Commands:**
-```bash
-# Fetch upstream updates
-git fetch upstream
+**Slash Command:** `/sync-upstream`
+- Location: `.claude/commands/sync-upstream.md`
+- Provides step-by-step guide for merging upstream changes
+- Handles workflow conflicts automatically
+- Preserves customizations (logos, CI/CD)
 
-# Merge into develop
-git checkout develop
-git merge upstream/develop
-
-# Resolve conflicts in:
-# - config/installation_config.yml (keep oaris changes)
-# - config/integration/apps.yml (keep flowise entry)
-# - .oaris/ directory (keep all)
-
-# Rebuild and test
-docker build -t oaris-chatwoot:latest -f docker/Dockerfile .
+**Branch Strategy:**
 ```
+upstream/develop → develop (mirror, CI/CD removed) → chatwoot-oaris-edition (production)
+```
+
+**Syncs Completed:**
+- 2025-11-28: v4.8.0 + 20 additional commits (Pinia, voice calls, Captain instrumentation)
 
 ---
 
-### Issue #18: Configure Database Backups
-- [ ] Research Chatwoot built-in backup features
-- [ ] Check if Chatwoot has native S3 backup integration
-- [ ] Review Chatwoot backup documentation
-- [ ] Compare Chatwoot native backups vs manual automation
-- [ ] Decide on backup strategy (native vs Coolify Scheduled Tasks)
-- [ ] Implement chosen backup solution
-- [ ] Test backup and restore procedures
-- [ ] Configure S3 lifecycle policies for retention
+### Issue #18: Configure Database Backups ✅ COMPLETE
+- [x] Research Chatwoot built-in backup features
+- [x] Check if Chatwoot has native S3 backup integration
+- [x] Review Chatwoot backup documentation
+- [x] Compare Chatwoot native backups vs manual automation
+- [x] Decide on backup strategy (system crontab with shell scripts)
+- [x] Implement backup scripts on alma server
+- [x] Test backup and restore procedures
+- [ ] Configure S3 lifecycle policies for retention (optional - manual cleanup works)
 
-**Priority:** HIGH (should be completed within 24-48 hours of production deployment)
+**Implementation:** System crontab with shell scripts on alma server
 
-**Investigation needed:**
-Before implementing manual backups via Coolify Scheduled Tasks, investigate if Chatwoot has:
-- Built-in S3 backup integration
-- Native backup commands or rake tasks
-- Database migration/backup utilities
-- Recommended backup procedures in docs
+**Scripts Created:**
+- `/opt/chatwoot-backup-postgres.sh` - PostgreSQL backup (dynamically detects user)
+- `/opt/chatwoot-backup-storage.sh` - Rails storage volume backup
 
-**Resources:**
-- Backup automation plan: `.oaris/local/BACKUP-AUTOMATION-PLAN.md` (manual approach)
-- Chatwoot docs: https://www.chatwoot.com/docs/self-hosted
-- S3 already configured: Hetzner Object Storage (bucket: `oaris`)
+**Schedule (crontab on alma):**
+- `0 2 * * *` - PostgreSQL backup at 2 AM UTC daily
+- `0 3 * * *` - Rails storage backup at 3 AM UTC daily
 
-**Options:**
-1. **Chatwoot Native** - If available, use built-in backup features
-2. **Coolify Scheduled Tasks** - Manual pg_dump + S3 upload (documented in backup plan)
-3. **Hybrid** - Combine Chatwoot native + manual storage backups
+**S3 Storage:**
+- PostgreSQL: `s3://oaris/chatwoot/production/postgres/`
+- Rails storage: `s3://oaris/chatwoot/production/storage/`
+
+**Logs:** `/var/log/chatwoot-backup.log`
+
+**Commands:**
+```bash
+# Manual backup
+ssh alma 'sudo /opt/chatwoot-backup-postgres.sh'
+ssh alma 'sudo /opt/chatwoot-backup-storage.sh'
+
+# Check logs
+ssh alma 'cat /var/log/chatwoot-backup.log'
+```
+
+**Full Documentation:** `.oaris/local/BACKUP-AUTOMATION-PLAN.md` (restore procedures, S3 commands, verification steps)
+
+**Why System Crontab Instead of Coolify:**
+- Coolify Scheduled Tasks had a 255-character command limit bug
+- System crontab is more reliable and persists across Coolify updates
+- Scripts are easier to maintain and update
 
 ---
 
@@ -494,16 +505,17 @@ Before implementing manual backups via Coolify Scheduled Tasks, investigate if C
 ### Additional
 - [x] Issue #15: Documentation (Coolify guide + Logo guide) ✅
 - [ ] Issue #16: Version management
-- [ ] Issue #17: Upstream sync strategy
-- [ ] Issue #18: Configure database backups (HIGH priority)
+- [x] Issue #17: Upstream sync strategy ✅
+- [x] Issue #18: Configure database backups ✅
 
 ---
 
 ## 🚦 Current Status
 
-**Last Updated:** 2025-11-12
+**Last Updated:** 2025-11-28
 
 **Current Phase:** 🎉 **Milestone 2 COMPLETE** → Production Deployment Live!
+**Current Version:** v4.8.0+ (synced with upstream 2025-11-28)
 **Production Branch:** `chatwoot-oaris-edition`
 **Upstream Sync Branch:** `develop` (mirrors upstream Chatwoot)
 **Docker Image:** `ghcr.io/oaris-dev/chatwoot:latest` (GitHub Container Registry)
