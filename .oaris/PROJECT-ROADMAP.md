@@ -534,13 +534,22 @@ ssh alma 'cat /var/log/chatwoot-backup.log'
 **Chatwoot Version:** v4.8.0 (synced with upstream 2025-11-28)
 **Oaris Edition:** v1.0.0
 **Production Branch:** `chatwoot-oaris-edition`
+**Staging Branch:** `chatwoot-oaris-staging`
 **Upstream Sync Branch:** `develop` (mirrors upstream Chatwoot)
 **Docker Image:** `ghcr.io/oaris-dev/chatwoot:latest` (GitHub Container Registry)
 
 **Branching Strategy:**
 ```
-upstream/develop → develop (clean mirror) → chatwoot-oaris-edition (customizations)
+upstream/develop → develop (clean mirror) → chatwoot-oaris-staging (testing) → chatwoot-oaris-edition (production)
+                                                    ↑
+                                            feature/* branches
 ```
+
+**Workflow:**
+1. Create feature branches from `chatwoot-oaris-staging`
+2. Test features on staging deployment
+3. Merge to `chatwoot-oaris-staging` for integration testing
+4. Promote to `chatwoot-oaris-edition` for production
 
 **✅ Milestone 1 COMPLETE:**
 - [x] Fork Chatwoot repository
