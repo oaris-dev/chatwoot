@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - chatwoot-oaris-edition
+      - chatwoot-oaris-staging
     paths:
       - 'app/**'
       - 'config/**'
@@ -42,7 +43,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/chatwoot-oaris-edition' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/chatwoot-oaris-staging' }}
             type=sha,prefix={{branch}}-
 
       - name: Set up Docker Buildx
