@@ -97,7 +97,7 @@ services:
     volumes:
       - 'postgres-data:/var/lib/postgresql/data'
     environment:
-      - 'POSTGRES_DB=${POSTGRES_DB:-chatwoot}'
+      - POSTGRES_DB=${POSTGRES_DB:-chatwoot}
       - POSTGRES_USER=$SERVICE_USER_POSTGRES
       - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
     healthcheck:
