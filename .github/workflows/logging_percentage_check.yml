@@ -13,6 +13,7 @@ concurrency:
 jobs:
   log_lines_check:
     runs-on: ubuntu-latest
+    if: ${{ github.repository == 'chatwoot/chatwoot' }}
 
     steps:
       - name: Checkout repository

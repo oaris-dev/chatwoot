@@ -13,6 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-22.04
+    if: ${{ github.repository == 'chatwoot/chatwoot' }}
 
     steps:
       - uses: actions/checkout@v4
