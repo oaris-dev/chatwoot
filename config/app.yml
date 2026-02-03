@@ -1,5 +1,5 @@
 shared: &shared
-  version: '4.9.1'
+  version: '4.10.1'
   oaris_version: '1.0.0'
 
 development:
