@@ -1,138 +1,193 @@
 # Sync Chatwoot Upstream
 
-Sync the latest changes from the official Chatwoot repository into our fork while preserving customizations.
+Sync the latest changes from the official Chatwoot repository into our fork while preserving Oaris Edition customizations.
 
 ## Branch Strategy
 
 ```
-upstream/develop → develop → chatwoot-oaris-edition
-     ↑                ↑              ↑
-  Official       Mirror with    Production with
-  Chatwoot       CI/CD removed   customizations
+upstream/develop → develop (mirror) → chatwoot-oaris-staging (test) → chatwoot-oaris-edition (production)
 ```
 
-## Instructions
+- `develop`: Clean mirror of upstream, only fork-specific removals (e.g. stale.yml)
+- `chatwoot-oaris-staging`: Staging branch, deployed to echo for testing
+- `chatwoot-oaris-edition`: Production branch, deployed to alma
 
-Follow these steps to sync upstream changes:
+## Important Notes
+
+- The `develop` branch has a push protection hook (`bin/validate_push`). Use `--no-verify` when pushing — this is safe since we're intentionally syncing.
+- Large upstream merges will trigger lint-staged / eslint on commit. Use `--no-verify` for merge commits — upstream code is already linted.
+- **Never merge directly to `chatwoot-oaris-edition`**. Always go through staging first.
+- After pushing staging, **wait for the user to verify echo** before merging to production.
+
+## Instructions
 
 ### Step 1: Fetch and Review Upstream Changes
 
 ```bash
-# Fetch latest from upstream
 git fetch upstream develop
 
-# Show new commits since last sync
-git log --oneline upstream/develop --not origin/develop
-
-# Count new commits
+# Count and preview new commits
 git rev-list --count origin/develop..upstream/develop
+git log --oneline origin/develop..upstream/develop | head -30
+
+# Check for version bumps
+git log --oneline upstream/develop --grep="Bump version" | head -5
+
+# Check for new migrations
+git diff origin/develop..upstream/develop --name-only -- db/migrate/
 ```
 
-Review the changes and summarize:
-- New features (feat:)
-- Bug fixes (fix:)
-- Breaking changes
-- Database migrations (check db/migrate/)
-- CI/CD changes (we skip these)
+Summarize for the user:
+- How many commits behind
+- Version releases included (e.g. v4.10.0 → v4.12.1)
+- Notable features, fixes, and breaking changes
+- New database migrations
+- Any workflow/CI changes
 
-### Step 2: Merge to develop Branch
+### Step 2: Merge Upstream into develop
 
 ```bash
-# Switch to develop
 git checkout develop
-
-# Merge upstream
 git merge upstream/develop --no-edit
 ```
 
-If there are conflicts in `.github/workflows/`:
-- We removed upstream workflows (run_foss_spec.yml, publish_*.yml, etc.)
-- Resolve by: `git rm <conflicting-workflow-file>`
-
-Commit the merge with a descriptive message.
-
-### Step 3: Push develop Branch
+**After merging, remove unwanted workflows** that waste GitHub Actions runners on our fork:
 
 ```bash
-git push origin develop
+# Remove if present — these are not needed on our fork:
+git rm -f .github/workflows/stale.yml 2>/dev/null  # Auto-closes our PRs
+# Add any other problematic workflows here as discovered
 ```
 
-### Step 4: Merge to Production Branch
+Commit the removal:
+```bash
+git commit --no-verify -m "chore: remove unwanted upstream workflows from fork"
+```
+
+If the merge itself had no workflow files to remove, skip this step.
+
+### Step 3: Push develop
 
 ```bash
-# Switch to production branch
-git checkout chatwoot-oaris-edition
+git push origin develop --no-verify
+```
 
-# Merge develop
-git merge develop -m "Merge develop into chatwoot-oaris-edition - vX.X.X update
+The `--no-verify` bypasses the `bin/validate_push` hook which blocks direct pushes to `develop` — this is safe for upstream syncs.
 
-Upstream changes:
-- [list key features/fixes]
+### Step 4: Merge develop into Staging
+
+```bash
+git checkout chatwoot-oaris-staging
+git merge develop --no-edit
+```
+
+**Expected conflicts and how to resolve them:**
+
+| File | Conflict reason | Resolution |
+|------|----------------|------------|
+| `config/app.yml` | We add `oaris_version` field | Keep upstream `version`, keep our `oaris_version` |
+| `.github/workflows/stale.yml` | We deleted it, upstream modified | `git rm .github/workflows/stale.yml` |
+| `.env.example` / `.gitignore` | Minor upstream changes | Accept upstream: `git checkout --theirs <file> && git add <file>` |
+
+After resolving conflicts:
+```bash
+git add -A
+git commit --no-verify -m "chore: sync with upstream vX.X.X
+
+Upstream changes (N commits):
+- [list key releases, features, fixes]
 
 Customizations preserved:
-- Logo size (h-12) on onboarding page
-- Coolify labels removed
-- Custom CI/CD workflow
-
-Database migrations included:
-- [list migration files if any]"
+- oaris_version in config/app.yml
+- Custom build-push-image.yml workflow
+- Removed stale.yml (not needed on fork)"
 ```
 
-If there are conflicts in `.env.example` or `.gitignore`:
-- Accept upstream version: `git checkout --theirs <file> && git add <file>`
-
-### Step 5: Push and Deploy
+### Step 5: Push Staging and Wait for Verification
 
 ```bash
-# Push to trigger GitHub Actions build
-git push origin chatwoot-oaris-edition
+git push origin chatwoot-oaris-staging --no-verify
 ```
 
-The push will:
-1. Trigger GitHub Actions workflow (build-push-image.yml)
-2. Build Docker image
-3. Push to ghcr.io/oaris-dev/chatwoot:latest
+This triggers the GitHub Actions build for the `:staging` image.
 
-### Step 6: Deploy via Coolify
+**STOP HERE.** Tell the user:
+- Staging is pushed and the image is building
+- They should redeploy echo in Coolify (Stop → Clean up old images → Redeploy)
+- Wait for them to confirm staging works before proceeding
 
-1. **Staging (echo)**: Redeploy to test
-2. **Production (alma)**: Redeploy after staging verification
+**Do NOT proceed to Step 6 until the user confirms staging is working.**
 
-Remember to use "Stop → Clean up old images → Redeploy" if Coolify uses cached images.
+### Step 6: Merge Staging into Production
+
+Only after the user confirms staging works:
+
+```bash
+git checkout chatwoot-oaris-edition
+git merge chatwoot-oaris-staging --no-edit
+```
+
+This should be a fast-forward merge if no other changes were made to production. If there are conflicts, resolve the same way as Step 4.
+
+```bash
+git push origin chatwoot-oaris-edition --no-verify
+```
+
+This triggers the GitHub Actions build for the `:latest` image.
+
+**Check that only one build triggered** (not duplicates):
+```bash
+gh run list --branch chatwoot-oaris-edition --limit 3 -R oaris-dev/chatwoot
+```
+
+If both a push-triggered and manual-triggered run exist, cancel the manual one.
+
+### Step 7: Deploy via Coolify
+
+1. **Staging (echo)**: Already deployed and verified in Step 5
+2. **Production (alma)**: Redeploy after `:latest` image build completes
+
+Use "Stop → Clean up old images → Redeploy" if Coolify serves a cached old image.
 
 ## Customizations to Preserve
 
-These customizations are on `chatwoot-oaris-edition` and should NOT be overwritten:
+These files differ between `develop` and `chatwoot-oaris-edition` and must survive syncs:
 
-1. **Logo size**: `app/views/installation/onboarding/index.html.erb` (h-8 → h-12)
-2. **Coolify labels removed**: `docker-compose.yml` (no traefik labels)
-3. **CI/CD**: `.github/workflows/build-push-image.yml` (our custom workflow)
-4. **Removed workflows**: We deleted upstream CI workflows that don't work for our setup
+| File | Customization |
+|------|--------------|
+| `config/app.yml` | `oaris_version: '1.0.0'` field added |
+| `config/installation_config.yml` | Installation name set to "Chatwoot oaris edition" |
+| `public/brand-assets/logo.svg` | Oaris Edition logo (light) |
+| `public/brand-assets/logo_dark.svg` | Oaris Edition logo (dark) |
+| `public/brand-assets/archive/` | Archived original Chatwoot logos |
+| `app/views/installation/onboarding/index.html.erb` | Logo height h-8 → h-12 |
+| `app/javascript/v3/views/auth/signup/Index.vue` | Login/signup branding |
+| `app/javascript/v3/views/login/Index.vue` | Login branding |
+| `app/javascript/v3/views/login/Saml.vue` | SAML login branding |
+| `app/javascript/widget/i18n/locale/de.json` | German widget translations (du-form) |
+| `app/controllers/api_controller.rb` | `oaris_version` in API response |
+| `app/controllers/dashboard_controller.rb` | `OARIS_VERSION` exposed |
+| `app/javascript/shared/store/globalConfig.js` | `oarisVersion` in store |
+| `app/javascript/dashboard/.../BuildInfo.vue` | Oaris version display |
+| `.github/workflows/build-push-image.yml` | Our custom GHCR image build |
+| `.oaris/` | Project docs and deployment configs |
+| `docker-compose.oaris.yaml` | Local dev / Coolify compose |
 
-## Workflows We Remove/Skip
+## Workflows We Remove
 
-These upstream workflows should be deleted if they cause conflicts:
-- `.github/workflows/run_foss_spec.yml`
-- `.github/workflows/run_mfa_spec.yml`
-- `.github/workflows/publish_foss_docker.yml`
-- `.github/workflows/publish_ee_docker.yml`
-- `.github/workflows/frontend-fe.yml`
-- `.github/workflows/test_docker_build.yml`
+These should be deleted from our fork if upstream re-adds them:
+- `.github/workflows/stale.yml` — Auto-closes our PRs after inactivity
+
+The old list (run_foss_spec.yml, publish_foss_docker.yml, etc.) has been removed upstream as of v4.12.1 and is no longer a concern.
 
 ## Post-Sync Checklist
 
-- [ ] New commits reviewed and summarized
-- [ ] develop branch merged and pushed
-- [ ] chatwoot-oaris-edition merged and pushed
-- [ ] GitHub Actions build successful
-- [ ] Staging (echo) deployed and tested
+- [ ] Upstream changes reviewed and summarized
+- [ ] `develop` merged and pushed
+- [ ] Unwanted workflows removed
+- [ ] `chatwoot-oaris-staging` merged, pushed, and image built
+- [ ] Staging (echo) deployed and tested by user
+- [ ] `chatwoot-oaris-edition` merged and pushed (only after staging verified)
 - [ ] Production (alma) deployed
-- [ ] Version verified in Settings > Account Settings
-
-## Current Version Info
-
-After sync, verify the version in Chatwoot UI:
-- Go to: Settings → Account Settings (bottom of page)
-- Should show: `vX.X.X Build <commit-hash>`
-
-The commit hash should match the latest commit on chatwoot-oaris-edition.
+- [ ] Version verified in Settings → Account Settings
+- [ ] Only one GitHub Actions build running (no duplicates)

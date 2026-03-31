@@ -82,6 +82,28 @@ docker-compose -f docker-compose.oaris.yaml up -d
 
 ---
 
+### Issue #19: Investigate & Implement Email Template Branding
+- [ ] Identify all mailer classes (`app/mailers/`)
+- [ ] Identify all email view templates (`app/views/*_mailer/`, `app/views/mailers/`)
+- [ ] Check email layout files for shared header/footer with logo
+- [ ] Check if `logo_thumbnail.svg` is used in emails (currently not customized)
+- [ ] Check if `INSTALLATION_NAME` is used in email copy or hardcoded as "Chatwoot"
+- [ ] Review Enterprise email overrides (`enterprise/app/views/`)
+- [ ] Check CSAT survey email templates
+- [ ] Replace email logo with Oaris Edition branding
+- [ ] Ensure installation name is used dynamically (not hardcoded)
+- [ ] Update `logo_thumbnail.svg` if used in emails
+- [ ] Test all email types render correctly with new branding
+
+**Related:**
+- Issue #3 notes `logo_thumbnail.svg` is not customized yet
+- Issue #2 / `.oaris/local/LOGO-GUIDE.md` documents logo locations including emails
+- `app/mailers/` — mailer classes
+- `app/views/` — email templates
+- `config/installation_config.yml` — installation name config
+
+---
+
 ### Issue #4: Deployment Infrastructure ✅ COMPLETE
 - [x] Create docker-compose.oaris.yaml for local development
 - [x] Create .oaris/coolify-deployment.yaml for production
@@ -221,7 +243,7 @@ CHATWOOT_SMTP_ENABLE_STARTTLS_AUTO=true
 ┌─────────────┐
 │  Customer   │
 └──────┬──────┘
-       │ Message
+       │ Message (text or postback from button click)
        ▼
 ┌─────────────────┐
 │ Chatwoot Inbox  │
@@ -236,16 +258,61 @@ CHATWOOT_SMTP_ENABLE_STARTTLS_AUTO=true
        ▼
 ┌─────────────────┐
 │ Flowise API     │  (External Service)
-│ (chat.oaris.ai) │
+│ (Mistral LLM)   │
 └──────┬──────────┘
-       │ AI Response
+       │ AI Response (text, cards, forms, or handoff)
        ▼
-┌─────────────────┐
-│ Chatwoot Reply  │
-└─────────────────┘
+┌──────────────────────┐
+│ Chatwoot Reply       │
+│ (text / cards / form)│
+└──────────────────────┘
 ```
 
 **Integration Type:** `inbox` (one integration per inbox, not account-wide)
+**LLM:** Mistral AI (via Flowise, self-hosted)
+
+**Rich Message Support:**
+
+Flowise can return structured responses that the processor service maps to Chatwoot content types:
+
+| Flowise response type | Chatwoot content_type | Use case |
+|---|---|---|
+| Plain text | `text` | Simple answers, FAQs |
+| Product/service card | `cards` | Hosting packages, pricing, proposals with "Buy" button |
+| Data collection | `form` | Billing details, contact info, order forms |
+| Options list | `input_select` | Choose a plan, pick a time slot |
+| Handoff signal | (transfer to agent) | Complex queries, complaints |
+
+**Example — Hosting package card:**
+```json
+{
+  "content_type": "cards",
+  "content_attributes": {
+    "items": [
+      {
+        "media_url": "https://oaris.de/images/hosting-pro.png",
+        "title": "Professional Hosting",
+        "description": "50 GB SSD, 5 Domains, SSL included — €9.90/month",
+        "actions": [
+          { "type": "link", "text": "Details", "uri": "https://oaris.de/hosting/pro" },
+          { "type": "postback", "text": "Buy Now", "payload": "BUY_HOSTING_PRO" }
+        ]
+      },
+      {
+        "media_url": "https://oaris.de/images/hosting-business.png",
+        "title": "Business Hosting",
+        "description": "200 GB SSD, Unlimited Domains, Priority Support — €24.90/month",
+        "actions": [
+          { "type": "link", "text": "Details", "uri": "https://oaris.de/hosting/business" },
+          { "type": "postback", "text": "Buy Now", "payload": "BUY_HOSTING_BUSINESS" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Postback flow:** When customer clicks "Buy Now", the postback payload (`BUY_HOSTING_PRO`) is sent back as a new message → triggers Flowise again → Flowise can respond with a form to collect billing details or a payment link.
 
 ---
 
@@ -308,9 +375,11 @@ flowise:
 
 ### Issue #11: Create Flowise Processor Service
 - [ ] Create `lib/integrations/flowise/processor_service.rb`
-- [ ] Implement message event handling
+- [ ] Implement message event handling (text + postback payloads)
 - [ ] Add HTTP client for Flowise API calls
-- [ ] Handle API responses and create reply messages
+- [ ] Handle plain text responses → `content_type: text`
+- [ ] Handle structured responses → `content_type: cards`, `form`, `input_select`
+- [ ] Handle handoff signals → transfer conversation to human agent
 - [ ] Add error handling and logging
 
 **File:** `lib/integrations/flowise/processor_service.rb`
@@ -322,27 +391,47 @@ class Integrations::Flowise::ProcessorService
 
   def perform
     # 1. Get incoming message from event_data
-    # 2. Check if message should trigger Flowise
-    # 3. Call Flowise API with message content
-    # 4. Parse response
-    # 5. Create outgoing reply message in Chatwoot
+    # 2. Check if message should trigger Flowise (skip outgoing, activity, etc.)
+    # 3. Extract message content (text body or postback payload)
+    # 4. Call Flowise API with message content
+    # 5. Parse response type (text, cards, form, handoff)
+    # 6. Create appropriate Chatwoot reply message
   end
 
   private
 
   def call_flowise_api(message_text)
-    # HTTP POST to Flowise endpoint
-    # Include API key if configured
+    # HTTP POST to #{hook.settings['api_endpoint']}/api/v1/prediction/#{hook.settings['flow_id']}
+    # Include API key header if hook.settings['api_key'] present
     # Return parsed response
   end
 
-  def create_reply(conversation, response_text)
-    # Create outgoing message in Chatwoot
+  def create_text_reply(conversation, text)
+    # content_type: 'text', content: text
+  end
+
+  def create_cards_reply(conversation, items)
+    # content_type: 'cards', content_attributes: { items: [...] }
+    # Each item: { media_url, title, description, actions: [{type, text, uri/payload}] }
+  end
+
+  def create_form_reply(conversation, fields)
+    # content_type: 'form', content_attributes: { items: [...] }
+  end
+
+  def handoff_to_agent(conversation)
+    # Set conversation status to 'open' (removes bot, alerts agents)
   end
 end
 ```
 
-**Reference:** `lib/integrations/dialogflow/processor_service.rb` (similar pattern)
+**Response mapping:** Flowise returns JSON. The processor service inspects the response
+to determine message type. Convention TBD — options:
+1. Flowise returns a structured JSON with `type` field (`text`, `cards`, `form`, `handoff`)
+2. Flowise returns plain text by default, structured content via special JSON format
+
+**Reference:** `lib/integrations/dialogflow/processor_service.rb` (similar pattern, plus
+the new `language_code` configurable approach from PR #13221)
 
 ---
 
@@ -502,6 +591,7 @@ ssh alma 'cat /var/log/chatwoot-backup.log'
 - [x] Issue #1: Update installation name ✅
 - [x] Issue #2: Document logo usage ✅
 - [x] Issue #3: Implement Oaris Edition logos ✅
+- [ ] Issue #19: Investigate & implement email template branding
 - [x] Issue #4: Deployment infrastructure ✅
 
 ### Milestone 2: Production Deployment
