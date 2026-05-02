@@ -55,8 +55,11 @@ git merge upstream/develop --no-edit
 
 ```bash
 # Remove if present — these are not needed on our fork:
-git rm -f .github/workflows/stale.yml 2>/dev/null  # Auto-closes our PRs
-# Add any other problematic workflows here as discovered
+git rm -f .github/workflows/stale.yml 2>/dev/null                    # Auto-closes our PRs
+git rm -f .github/workflows/nightly_installer.yml 2>/dev/null        # Daily Chatwoot installer test, ~50min/run, always fails on fork
+git rm -f .github/workflows/publish_codespace_image.yml 2>/dev/null  # Pushes to upstream's GHCR namespace
+git rm -f .github/workflows/deploy_check.yml 2>/dev/null             # Checks chatwoot-pr-*.herokuapp.com review apps we don't have
+git rm -f .github/workflows/lock.yml 2>/dev/null                     # Gated to chatwoot/chatwoot, no-op on fork
 ```
 
 Commit the removal:
@@ -65,6 +68,8 @@ git commit --no-verify -m "chore: remove unwanted upstream workflows from fork"
 ```
 
 If the merge itself had no workflow files to remove, skip this step.
+
+**Modify/delete conflicts:** If upstream modified a workflow we already deleted on our branches, you'll get `CONFLICT (modify/delete)` during Step 4 (merge into staging). Resolve with `git rm <file>` for each — we always want them gone.
 
 ### Step 3: Push develop
 
@@ -176,7 +181,18 @@ These files differ between `develop` and `chatwoot-oaris-edition` and must survi
 ## Workflows We Remove
 
 These should be deleted from our fork if upstream re-adds them:
-- `.github/workflows/stale.yml` — Auto-closes our PRs after inactivity
+
+| Workflow | Reason |
+|----------|--------|
+| `stale.yml` | Auto-closes our PRs after inactivity |
+| `nightly_installer.yml` | Daily test of `get.chatwoot.app/linux/install.sh`; ~50 min/run, fails every night on our fork |
+| `publish_codespace_image.yml` | Pushes to `ghcr.io/chatwoot/chatwoot_codespace` (upstream namespace) |
+| `deploy_check.yml` | Checks `chatwoot-pr-<n>.herokuapp.com` review apps that don't exist on our fork |
+| `lock.yml` | Gated to `chatwoot/chatwoot` via `if:`, no-op on fork but spins up the runner hourly |
+
+**Workflows we keep** (cheap and useful, do not delete):
+- `auto-assign-pr.yml`, `lint_pr.yml`, `size-limit.yml`, `logging_percentage_check.yml`
+- Our custom `build-push-image.yml` (always preserve)
 
 The old list (run_foss_spec.yml, publish_foss_docker.yml, etc.) has been removed upstream as of v4.12.1 and is no longer a concern.
 
