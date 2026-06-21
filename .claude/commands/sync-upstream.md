@@ -60,6 +60,11 @@ git rm -f .github/workflows/nightly_installer.yml 2>/dev/null        # Daily Cha
 git rm -f .github/workflows/publish_codespace_image.yml 2>/dev/null  # Pushes to upstream's GHCR namespace
 git rm -f .github/workflows/deploy_check.yml 2>/dev/null             # Checks chatwoot-pr-*.herokuapp.com review apps we don't have
 git rm -f .github/workflows/lock.yml 2>/dev/null                     # Gated to chatwoot/chatwoot, no-op on fork
+git rm -f .github/workflows/ghsa-linear-sync.yml 2>/dev/null         # Daily cron, needs upstream-only Linear secrets, fails on fork
+git rm -f .github/workflows/frontend-fe.yml 2>/dev/null              # Upstream-only frontend CI, not used on fork
+git rm -f .github/workflows/publish_ee_docker.yml 2>/dev/null        # Pushes EE image to upstream namespace
+git rm -f .github/workflows/publish_foss_docker.yml 2>/dev/null      # Pushes FOSS image to upstream namespace
+git rm -f .github/workflows/test_docker_build.yml 2>/dev/null        # Upstream docker build matrix, not needed on fork
 ```
 
 Commit the removal:
@@ -189,12 +194,17 @@ These should be deleted from our fork if upstream re-adds them:
 | `publish_codespace_image.yml` | Pushes to `ghcr.io/chatwoot/chatwoot_codespace` (upstream namespace) |
 | `deploy_check.yml` | Checks `chatwoot-pr-<n>.herokuapp.com` review apps that don't exist on our fork |
 | `lock.yml` | Gated to `chatwoot/chatwoot` via `if:`, no-op on fork but spins up the runner hourly |
+| `ghsa-linear-sync.yml` | Daily cron syncing GHSA advisories to upstream's Linear; needs secrets we don't have, fails on fork |
+| `frontend-fe.yml` | Upstream-only frontend CI, not used on our fork |
+| `publish_ee_docker.yml` | Pushes the EE image to upstream's GHCR namespace |
+| `publish_foss_docker.yml` | Pushes the FOSS image to upstream's GHCR namespace |
+| `test_docker_build.yml` | Upstream docker build matrix, not needed on our fork |
 
 **Workflows we keep** (cheap and useful, do not delete):
 - `auto-assign-pr.yml`, `lint_pr.yml`, `size-limit.yml`, `logging_percentage_check.yml`
 - Our custom `build-push-image.yml` (always preserve)
 
-The old list (run_foss_spec.yml, publish_foss_docker.yml, etc.) has been removed upstream as of v4.12.1 and is no longer a concern.
+As of the v4.15.1 sync, upstream re-added several of these (`publish_foss_docker.yml`, `publish_ee_docker.yml`, `test_docker_build.yml`, `frontend-fe.yml`) plus the new `ghsa-linear-sync.yml` — all are in the remove list above. `run_foss_spec.yml` and `run_mfa_spec.yml` are not currently present on our branches; remove them too if a future sync brings them back.
 
 ## Post-Sync Checklist
 
