@@ -7,7 +7,7 @@ import types from '../../mutation-types';
 export const actions = {
   index: async (
     { commit },
-    { pageNumber, portalSlug, locale, status, authorId, categorySlug }
+    { pageNumber, portalSlug, locale, status, authorId, categorySlug, query }
   ) => {
     try {
       commit(types.SET_UI_FLAG, { isFetching: true });
@@ -18,6 +18,7 @@ export const actions = {
         status,
         authorId,
         categorySlug,
+        query,
       });
       const payload = camelcaseKeys(data.payload);
       const meta = camelcaseKeys(data.meta);
@@ -69,30 +70,9 @@ export const actions = {
     }
   },
 
-  updateAsync: async ({ commit }, { portalSlug, articleId, ...articleObj }) => {
-    commit(types.UPDATE_ARTICLE_FLAG, {
-      uiFlags: { isUpdating: true },
-      articleId,
-    });
-
-    try {
-      await articlesAPI.updateArticle({ portalSlug, articleId, articleObj });
-      return articleId;
-    } catch (error) {
-      return throwErrorMessage(error);
-    } finally {
-      commit(types.UPDATE_ARTICLE_FLAG, {
-        uiFlags: { isUpdating: false },
-        articleId,
-      });
-    }
-  },
-
   update: async ({ commit }, { portalSlug, articleId, ...articleObj }) => {
     commit(types.UPDATE_ARTICLE_FLAG, {
-      uiFlags: {
-        isUpdating: true,
-      },
+      uiFlags: { isUpdating: true },
       articleId,
     });
 
@@ -110,9 +90,7 @@ export const actions = {
       return throwErrorMessage(error);
     } finally {
       commit(types.UPDATE_ARTICLE_FLAG, {
-        uiFlags: {
-          isUpdating: false,
-        },
+        uiFlags: { isUpdating: false },
         articleId,
       });
     }
@@ -188,5 +166,19 @@ export const actions = {
       commit(types.SET_ARTICLE_POSITIONS, oldPositions);
       throw error;
     }
+  },
+
+  bulkTranslate: async (
+    _,
+    { portalSlug, articleIds, locale, categoryId, force = false }
+  ) => {
+    const { data } = await articlesAPI.bulkTranslate({
+      portalSlug,
+      articleIds,
+      locale,
+      categoryId,
+      force,
+    });
+    return data;
   },
 };
