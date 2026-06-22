@@ -9,15 +9,15 @@ upstream/develop → develop (mirror) → chatwoot-oaris-staging (test) → chat
 ```
 
 - `develop`: Clean mirror of upstream, only fork-specific removals (e.g. stale.yml)
-- `chatwoot-oaris-staging`: Staging branch, deployed to echo for testing
-- `chatwoot-oaris-edition`: Production branch, deployed to alma
+- `chatwoot-oaris-staging`: Staging branch, deployed to the staging host for testing
+- `chatwoot-oaris-edition`: Production branch, deployed to the production host
 
 ## Important Notes
 
 - The `develop` branch has a push protection hook (`bin/validate_push`). Use `--no-verify` when pushing — this is safe since we're intentionally syncing.
 - Large upstream merges will trigger lint-staged / eslint on commit. Use `--no-verify` for merge commits — upstream code is already linted.
 - **Never merge directly to `chatwoot-oaris-edition`**. Always go through staging first.
-- After pushing staging, **wait for the user to verify echo** before merging to production.
+- After pushing staging, **wait for the user to verify the staging host** before merging to production.
 
 ## Instructions
 
@@ -123,7 +123,7 @@ This triggers the GitHub Actions build for the `:staging` image.
 
 **STOP HERE.** Tell the user:
 - Staging is pushed and the image is building
-- They should redeploy echo in Coolify (Stop → Clean up old images → Redeploy)
+- They should redeploy the staging host in Coolify (Stop → Clean up old images → Redeploy)
 - Wait for them to confirm staging works before proceeding
 
 **Do NOT proceed to Step 6 until the user confirms staging is working.**
@@ -154,8 +154,8 @@ If both a push-triggered and manual-triggered run exist, cancel the manual one.
 
 ### Step 7: Deploy via Coolify
 
-1. **Staging (echo)**: Already deployed and verified in Step 5
-2. **Production (alma)**: Redeploy after `:latest` image build completes
+1. **Staging (the staging host)**: Already deployed and verified in Step 5
+2. **Production (the production host)**: Redeploy after `:latest` image build completes
 
 Use "Stop → Clean up old images → Redeploy" if Coolify serves a cached old image.
 
@@ -212,8 +212,8 @@ As of the v4.15.1 sync, upstream re-added several of these (`publish_foss_docker
 - [ ] `develop` merged and pushed
 - [ ] Unwanted workflows removed
 - [ ] `chatwoot-oaris-staging` merged, pushed, and image built
-- [ ] Staging (echo) deployed and tested by user
+- [ ] Staging (the staging host) deployed and tested by user
 - [ ] `chatwoot-oaris-edition` merged and pushed (only after staging verified)
-- [ ] Production (alma) deployed
+- [ ] Production (the production host) deployed
 - [ ] Version verified in Settings → Account Settings
 - [ ] Only one GitHub Actions build running (no duplicates)
