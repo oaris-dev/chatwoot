@@ -87,9 +87,10 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - "bundle exec rails runner 'puts Sidekiq.redis(&:info)' > /dev/null 2>&1"
+        - "pgrep -f '[s]idekiq' > /dev/null"
       interval: 30s
       timeout: 10s
+      start_period: 60s
       retries: 3
   postgres:
     image: 'pgvector/pgvector:pg12'
