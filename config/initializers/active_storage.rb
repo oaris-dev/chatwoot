@@ -12,6 +12,14 @@ Rails.application.config.active_storage.content_types_allowed_inline += %w[
   audio/x-wav
 ]
 
+# Rails blocks the libvips loaders for these formats. Keep the originals downloadable
+# without generating representation URLs that fail when the thumbnail is processed.
+Rails.application.config.active_storage.variable_content_types -= %w[
+  image/bmp
+  image/vnd.microsoft.icon
+  image/vnd.adobe.photoshop
+]
+
 module ActiveStorageDirectUploadMetadataFilter
   INTERNAL_METADATA_KEYS = %w[identified analyzed composed].freeze
 
@@ -45,9 +53,31 @@ module ActiveStorageProxyRangeLimit
   end
 end
 
+# Block the default Rails direct-upload route. Dashboard and widget uploads both go
+# through the scoped, authenticated /api/v1/... endpoints, so the bare route has no
+# legitimate caller; leaving it open allows anonymous blob creation. Scoped subclasses
+# call super and are exempt via the instance_of? check.
+module ActiveStorageBareDirectUploadGuard
+  extend ActiveSupport::Concern
+
+  included do
+    before_action :reject_bare_direct_upload
+  end
+
+  private
+
+  def reject_bare_direct_upload
+    head :forbidden if instance_of?(ActiveStorage::DirectUploadsController)
+  end
+end
+
 Rails.application.config.to_prepare do
   unless ActiveStorage::DirectUploadsController < ActiveStorageDirectUploadMetadataFilter
     ActiveStorage::DirectUploadsController.prepend(ActiveStorageDirectUploadMetadataFilter)
+  end
+
+  unless ActiveStorage::DirectUploadsController.include?(ActiveStorageBareDirectUploadGuard)
+    ActiveStorage::DirectUploadsController.include(ActiveStorageBareDirectUploadGuard)
   end
 
   ActiveStorage::Streaming.prepend(ActiveStorageProxyRangeLimit) unless ActiveStorage::Streaming < ActiveStorageProxyRangeLimit

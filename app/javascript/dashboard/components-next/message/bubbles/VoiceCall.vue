@@ -18,6 +18,7 @@ import { useCallsStore } from 'dashboard/stores/calls';
 import { VOICE_CALL_PROVIDERS } from 'dashboard/helper/inbox';
 import { formatDuration } from 'shared/helpers/timeHelper';
 import { useAlert } from 'dashboard/composables';
+import { ExceptionWithMessage } from 'shared/helpers/CustomErrors';
 
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import BaseBubble from 'next/message/bubbles/Base.vue';
@@ -34,6 +35,7 @@ const ICON_MAP = {
   [VOICE_CALL_STATUS.COMPLETED]: 'i-ph-phone-bold',
   [VOICE_CALL_STATUS.NO_ANSWER]: 'i-ph-phone-x-bold',
   [VOICE_CALL_STATUS.FAILED]: 'i-ph-phone-x-bold',
+  [VOICE_CALL_STATUS.REJECTED]: 'i-ph-phone-x-bold',
 };
 
 const { t } = useI18n();
@@ -81,7 +83,11 @@ const isWhatsapp = computed(
   () => call.value?.provider === VOICE_CALL_PROVIDERS.WHATSAPP
 );
 const isFailed = computed(() =>
-  [VOICE_CALL_STATUS.NO_ANSWER, VOICE_CALL_STATUS.FAILED].includes(status.value)
+  [
+    VOICE_CALL_STATUS.NO_ANSWER,
+    VOICE_CALL_STATUS.FAILED,
+    VOICE_CALL_STATUS.REJECTED,
+  ].includes(status.value)
 );
 const isMissedInbound = computed(() => isFailed.value && !isOutbound.value);
 const endReason = computed(() => call.value?.endReason);
@@ -165,6 +171,9 @@ const subtext = computed(() => {
     if (isOutbound.value) {
       return t('CONVERSATION.VOICE_CALL.NO_ANSWER_OUTBOUND_SUBTEXT');
     }
+    if (endReason.value === VOICE_CALL_END_REASON.OUTSIDE_WORKING_HOURS) {
+      return t('CONVERSATION.VOICE_CALL.MISSED_CALL_OUTSIDE_HOURS');
+    }
     if (wasDeclinedByAgent.value && displayAgentName.value) {
       return t('CONVERSATION.VOICE_CALL.MISSED_CALL_DECLINED_BY', {
         agentName: displayAgentName.value,
@@ -238,6 +247,16 @@ const handleJoinCall = async () => {
     });
   }
 
+  // The store skips calls that rang while the agent was away or were dismissed; register it so joinCall picks the right provider.
+  callsStore.addCall({
+    callSid: callSid.value,
+    callId: call.value?.id,
+    provider: call.value?.provider,
+    conversationId: conversationId.value,
+    inboxId: inboxId.value,
+    callDirection: VOICE_CALL_DIRECTION.INBOUND,
+  });
+
   await joinCall({
     conversationId: conversationId.value,
     inboxId: inboxId.value,
@@ -248,6 +267,7 @@ const handleJoinCall = async () => {
 const canCallBack = computed(
   () =>
     isMissedInbound.value &&
+    (isWhatsapp.value || !!sender.value?.phoneNumber) &&
     !!inboxId.value &&
     !!conversationId.value &&
     !hasActiveCall.value &&
@@ -258,9 +278,9 @@ const handleCallBack = async () => {
   if (!canCallBack.value || isInitiatingCall.value) return;
   try {
     if (isWhatsapp.value) {
-      const response = await whatsappCallSession.initiateOutboundCall(
-        conversationId.value
-      );
+      const response = await whatsappCallSession.initiateOutboundCall({
+        conversationId: conversationId.value,
+      });
       if (response?.status === VOICE_CALL_OUTBOUND_INIT_STATUS.LOCKED) return;
       // Permission template path returns no call id — show banner, no widget yet.
       if (!response?.id) {
@@ -292,9 +312,14 @@ const handleCallBack = async () => {
       conversationId: response?.conversation_id ?? conversationId.value,
       inboxId: inboxId.value,
       callDirection: VOICE_CALL_DIRECTION.OUTBOUND,
+      provider: VOICE_CALL_PROVIDERS.TWILIO,
     });
   } catch (error) {
-    useAlert(error?.message || t('CONTACT_PANEL.CALL_FAILED'));
+    useAlert(
+      error instanceof ExceptionWithMessage
+        ? error.data
+        : error?.message || t('CONTACT_PANEL.CALL_FAILED')
+    );
   }
 };
 </script>
