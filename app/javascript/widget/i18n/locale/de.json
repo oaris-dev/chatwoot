@@ -59,6 +59,9 @@
   },
   "POWERED_BY": "Powered by Chatwoot",
   "EMAIL_PLACEHOLDER": "Bitte gib deine E-Mail-Adresse ein",
+  "TRANSLATING": "Translating",
+  "VIEW_ORIGINAL": "View original",
+  "VIEW_TRANSLATION": "View translation",
   "CHAT_PLACEHOLDER": "Schreib deine Nachricht",
   "TODAY": "Heute",
   "YESTERDAY": "Gestern",
@@ -105,6 +108,11 @@
     "PLACEHOLDER": "Emojis durchsuchen",
     "NOT_FOUND": "Kein Emoji entspricht deiner Suche",
     "ARIA_LABEL": "Emoji-Auswahl"
+  },
+  "EMOJI_ICON_PICKER": {
+    "SEARCH_EMOJI": "Emojis suchen …",
+    "FREQUENTLY_USED": "Häufig verwendet",
+    "NO_EMOJI": "Kein Emoji entspricht deiner Suche"
   },
   "CSAT": {
     "TITLE": "Bewerte deine Konversation",
