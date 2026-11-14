@@ -3,9 +3,13 @@
 # Table name: channel_whatsapp
 #
 #  id                             :bigint           not null, primary key
+#  business_management_token      :text
 #  message_templates              :jsonb
 #  message_templates_last_updated :datetime
 #  phone_number                   :string           not null
+#  phone_number_health            :jsonb            not null
+#  phone_number_health_checked_at :datetime
+#  phone_number_health_error      :string
 #  provider                       :string           default("default")
 #  provider_config                :jsonb
 #  created_at                     :datetime         not null
@@ -14,7 +18,8 @@
 #
 # Indexes
 #
-#  index_channel_whatsapp_on_phone_number  (phone_number) UNIQUE
+#  index_channel_whatsapp_on_phone_number                    (phone_number) UNIQUE
+#  index_channel_whatsapp_on_phone_number_health_checked_at  (phone_number_health_checked_at)
 #
 
 class Channel::Whatsapp < ApplicationRecord
@@ -23,16 +28,20 @@ class Channel::Whatsapp < ApplicationRecord
 
   self.table_name = 'channel_whatsapp'
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
+  encrypts :business_management_token if Chatwoot.encryption_configured?
 
   # default at the moment is 360dialog lets change later.
   PROVIDERS = %w[default whatsapp_cloud].freeze
   before_validation :ensure_webhook_verify_token
+  before_validation :ensure_webhook_token
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :phone_number, presence: true, uniqueness: true
   validate :validate_provider_config
+  validate :validate_app_secret, if: :app_secret_required?
 
   after_create :sync_templates
+  after_update_commit :log_credentials_transfer, if: :saved_change_to_provider_config?
   before_destroy :teardown_webhooks
   after_commit :setup_webhooks, on: :create, if: :should_auto_setup_webhooks?
 
@@ -69,6 +78,16 @@ class Channel::Whatsapp < ApplicationRecord
     end
   end
 
+  def template_access_token
+    return provider_config['api_key'] unless ChatwootApp.chatwoot_cloud? && provider_config['source'] == 'embedded_signup'
+
+    business_management_token.presence || provider_config['api_key']
+  end
+
+  def serializable_hash(options = nil)
+    super.except('business_management_token')
+  end
+
   # Enables voice: turns calling on at Meta (idempotent), then re-registers webhooks
   # with the in-memory calling_enabled flag so the `calls` field is subscribed. The
   # flag is persisted only after registration succeeds, so a webhook failure can't
@@ -100,6 +119,17 @@ class Channel::Whatsapp < ApplicationRecord
     end
   end
 
+  # Whether the pending (unsaved) provider_config change drops the embedded_signup
+  # source marker, i.e. this save is an embedded signup → manual setup transfer.
+  def embedded_to_manual_transfer_pending?
+    before, after = provider_config_change
+    before&.dig('source') == 'embedded_signup' && after['source'] != 'embedded_signup'
+  end
+
+  def app_secret_pending?
+    manual_cloud_setup? && provider_config['app_secret'].blank?
+  end
+
   def mark_message_templates_updated
     # rubocop:disable Rails/SkipsModelValidations
     update_column(:message_templates_last_updated, Time.zone.now)
@@ -112,8 +142,14 @@ class Channel::Whatsapp < ApplicationRecord
   delegate :media_url, to: :provider_service
   delegate :api_headers, to: :provider_service
 
-  def setup_webhooks
-    perform_webhook_setup
+  def send_contact_info_request(identifier, message)
+    raise NotImplementedError, 'Contact information requests require a WhatsApp Cloud provider' unless provider == 'whatsapp_cloud'
+
+    Whatsapp::Providers::WhatsappCloudContactInfoRequestService.perform(self, identifier, message)
+  end
+
+  def setup_webhooks(is_coexistence: nil)
+    perform_webhook_setup(is_coexistence: is_coexistence)
   rescue StandardError => e
     Rails.logger.error "[WHATSAPP] Webhook setup failed: #{e.message}"
     prompt_reauthorization!
@@ -125,16 +161,55 @@ class Channel::Whatsapp < ApplicationRecord
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider == 'whatsapp_cloud'
   end
 
+  def ensure_webhook_token
+    return unless provider == 'default'
+
+    # Derived for existing channels so concurrent saves register the same token with 360dialog.
+    provider_config['webhook_token'] ||= if new_record?
+                                           SecureRandom.hex(16)
+                                         else
+                                           OpenSSL::HMAC.hexdigest('SHA256', Rails.application.secret_key_base, "whatsapp_webhook_token:#{id}")
+                                         end
+  end
+
   def validate_provider_config
+    return if errors.any?
+
     errors.add(:provider_config, 'Invalid Credentials') unless provider_service.validate_provider_config?
   end
 
-  def perform_webhook_setup
-    webhook_setup_service.perform
+  def manual_cloud_setup?
+    provider == 'whatsapp_cloud' && provider_config['source'] != 'embedded_signup'
   end
 
-  def webhook_setup_service
-    Whatsapp::WebhookSetupService.new(self, provider_config['business_account_id'], provider_config['api_key'])
+  def app_secret_required?
+    return false unless manual_cloud_setup?
+
+    previous_config = provider_config_in_database.to_h
+    new_record? || provider_in_database != 'whatsapp_cloud' ||
+      previous_config['app_secret'].present? || previous_config['source'] == 'embedded_signup'
+  end
+
+  def validate_app_secret
+    errors.add(:provider_config, 'App secret is required') if provider_config['app_secret'].blank?
+  end
+
+  # Logs only the embedded signup → manual migration (the save drops the
+  # embedded_signup source marker), so credential rotations on inboxes that are
+  # already manual stay silent.
+  def log_credentials_transfer
+    before, after = saved_change_to_provider_config
+    return unless before&.dig('source') == 'embedded_signup' && after['source'] != 'embedded_signup'
+
+    Rails.logger.info("[WHATSAPP_EMBEDDED_TO_MANUAL] success account_id=#{account_id} channel_id=#{id}")
+  end
+
+  def perform_webhook_setup(is_coexistence: nil)
+    webhook_setup_service(is_coexistence: is_coexistence).perform
+  end
+
+  def webhook_setup_service(is_coexistence: nil)
+    Whatsapp::WebhookSetupService.new(self, provider_config['business_account_id'], provider_config['api_key'], is_coexistence: is_coexistence)
   end
 
   def teardown_webhooks
@@ -142,8 +217,11 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def should_auto_setup_webhooks?
-    # Only auto-setup webhooks for whatsapp_cloud provider with manual setup
-    # Embedded signup calls setup_webhooks explicitly in EmbeddedSignupService
-    provider == 'whatsapp_cloud' && provider_config['source'] != 'embedded_signup'
+    # Embedded signup and Manual V2 run webhook setup explicitly so their API
+    # responses can reflect the real result instead of swallowing callback errors.
+    explicitly_configured_sources = %w[embedded_signup manual_setup_v2]
+    provider == 'whatsapp_cloud' && explicitly_configured_sources.exclude?(provider_config['source'])
   end
 end
+
+Channel::Whatsapp.prepend_mod_with('Channel::Whatsapp')

@@ -1,7 +1,9 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import LocaleCard from 'dashboard/components-next/HelpCenter/LocaleCard/LocaleCard.vue';
 import LocaleContentDialog from 'dashboard/components-next/HelpCenter/Pages/LocalePage/LocaleContentDialog.vue';
+import PopularContentDialog from 'dashboard/components-next/HelpCenter/Pages/LocalePage/PopularContentDialog.vue';
+import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import { useStore } from 'dashboard/composables/store';
 import { useAlert, useTrack } from 'dashboard/composables';
 import { useUISettings } from 'dashboard/composables/useUISettings';
@@ -26,6 +28,9 @@ const route = useRoute();
 const { uiSettings, updateUISettings } = useUISettings();
 
 const contentDialogRef = ref(null);
+const popularContentDialogRef = ref(null);
+const deleteDialogRef = ref(null);
+const localeToDelete = ref(null);
 
 const isLocaleDefault = code => {
   return props.portal?.meta?.default_locale === code;
@@ -87,22 +92,21 @@ const updateLastActivePortal = async localeCode => {
   }
 };
 
-const deletePortalLocale = async ({ localeCode }) => {
-  const updatedLocales = props.locales
-    .filter(locale => locale.code !== localeCode)
-    .map(locale => locale.code);
-  const updatedDraftLocales = props.locales
-    .filter(locale => locale.code !== localeCode && locale.isDraft)
-    .map(locale => locale.code);
+const deletePortalLocale = async () => {
+  const localeCode = localeToDelete.value.code;
+  deleteDialogRef.value.close();
 
-  const defaultLocale = props.portal.meta.default_locale;
-
-  await updatePortalLocales({
-    newAllowedLocales: updatedLocales,
-    newDraftLocales: updatedDraftLocales,
-    defaultLocale,
-    messageKey: 'DELETE_LOCALE',
-  });
+  try {
+    await store.dispatch('portals/removeLocale', {
+      portalSlug: props.portal.slug,
+      locale: localeCode,
+    });
+    useAlert(t('HELP_CENTER.PORTAL.DELETE_LOCALE.API.SUCCESS_MESSAGE'));
+  } catch (error) {
+    useAlert(
+      error?.message || t('HELP_CENTER.PORTAL.DELETE_LOCALE.API.ERROR_MESSAGE')
+    );
+  }
 
   await updateLastActivePortal(localeCode);
 
@@ -111,6 +115,18 @@ const deletePortalLocale = async ({ localeCode }) => {
     from: route.name,
   });
 };
+
+const openDeleteDialog = localeCode => {
+  localeToDelete.value = props.locales.find(
+    locale => locale.code === localeCode
+  );
+  deleteDialogRef.value.open();
+};
+
+watch(
+  () => props.portal.slug,
+  () => deleteDialogRef.value?.close()
+);
 
 const updateDraftLocales = async ({ localeCode, shouldDraft, messageKey }) => {
   const newAllowedLocales = props.locales.map(locale => locale.code);
@@ -154,8 +170,10 @@ const handleAction = ({ action }, localeCode) => {
     publishLocale({ localeCode: localeCode });
   } else if (action === 'customize-content') {
     contentDialogRef.value.openForLocale(localeCode);
+  } else if (action === 'select-popular-content') {
+    popularContentDialogRef.value.openForLocale(localeCode);
   } else if (action === 'delete') {
-    deletePortalLocale({ localeCode: localeCode });
+    openDeleteDialog(localeCode);
   }
 };
 </script>
@@ -174,5 +192,31 @@ const handleAction = ({ action }, localeCode) => {
       @action="handleAction($event, locale.code)"
     />
     <LocaleContentDialog ref="contentDialogRef" :portal="portal" />
+    <PopularContentDialog ref="popularContentDialogRef" :portal="portal" />
+    <Dialog
+      ref="deleteDialogRef"
+      type="alert"
+      :title="
+        t('HELP_CENTER.PORTAL.DELETE_LOCALE.DIALOG.TITLE', {
+          locale: localeToDelete?.name,
+        })
+      "
+      :description="
+        t('HELP_CENTER.PORTAL.DELETE_LOCALE.DIALOG.DESCRIPTION', {
+          articles: t(
+            'HELP_CENTER.LOCALES_PAGE.LOCALE_CARD.ARTICLES_COUNT',
+            localeToDelete?.articlesCount || 0
+          ),
+          categories: t(
+            'HELP_CENTER.LOCALES_PAGE.LOCALE_CARD.CATEGORIES_COUNT',
+            localeToDelete?.categoriesCount || 0
+          ),
+        })
+      "
+      :confirm-button-label="
+        t('HELP_CENTER.PORTAL.DELETE_LOCALE.DIALOG.CONFIRM')
+      "
+      @confirm="deletePortalLocale"
+    />
   </ul>
 </template>

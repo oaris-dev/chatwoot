@@ -101,7 +101,24 @@ export default {
       currentUser: 'getCurrentUser',
       currentUserId: 'getCurrentUserID',
       globalConfig: 'globalConfig/get',
+      isOnChatwootCloud: 'globalConfig/isOnChatwootCloud',
     }),
+    apiAndWebhooksEnabled() {
+      if (!this.isOnChatwootCloud) return true;
+
+      return this.currentUser.accounts.some(
+        account => account.api_and_webhooks
+      );
+    },
+    accessTokenDescription() {
+      if (!this.apiAndWebhooksEnabled) {
+        return this.$t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.PAID_PLAN_NOTE');
+      }
+
+      return this.replaceInstallationName(
+        this.$t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.NOTE')
+      );
+    },
     isMfaEnabled() {
       return parseBoolean(window.chatwootConfig?.isMfaEnabled);
     },
@@ -135,17 +152,17 @@ export default {
       }
     },
     async updateProfile(userAttributes) {
-      const { name, email, displayName } = userAttributes;
+      const { name, email, displayName, currentPassword } = userAttributes;
       const hasEmailChanged = this.currentUser.email !== email;
       this.name = name || this.name;
-      this.email = email || this.email;
       this.displayName = displayName || this.displayName;
 
       const updatePayload = {
         name: this.name,
-        email: this.email,
+        email: email || this.email,
         displayName: this.displayName,
         avatar: this.avatarFile,
+        current_password: hasEmailChanged ? currentPassword : undefined,
       };
 
       const success = await this.dispatchUpdate(
@@ -191,10 +208,14 @@ export default {
       useAlert(this.$t('PROFILE_SETTINGS.FORM.SEND_MESSAGE.UPDATE_SUCCESS'));
     },
     async onCopyToken(value) {
+      if (!this.apiAndWebhooksEnabled) return;
+
       await copyTextToClipboard(value);
       useAlert(this.$t('COMPONENTS.CODE.COPY_SUCCESSFUL'));
     },
     async resetAccessToken() {
+      if (!this.apiAndWebhooksEnabled) return;
+
       const success = await this.$store.dispatch('resetAccessToken');
       if (success) {
         useAlert(this.$t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.RESET_SUCCESS'));
@@ -339,12 +360,11 @@ export default {
     <SectionLayout
       with-border
       :title="$t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.TITLE')"
-      :description="
-        replaceInstallationName($t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.NOTE'))
-      "
+      :description="accessTokenDescription"
     >
       <AccessToken
         :value="currentUser.access_token"
+        :disabled="!apiAndWebhooksEnabled"
         @on-copy="onCopyToken"
         @on-reset="resetAccessToken"
       />
